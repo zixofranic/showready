@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useEvents } from "@/hooks/useEvents";
 import { useProperties } from "@/hooks/useProperties";
 import type { Event } from "@/types/database";
+import { EventQRCode } from "@/components/EventQRCode";
 
 type Tab = "upcoming" | "live" | "completed";
 
@@ -326,6 +327,11 @@ export default function EventsPage() {
                         >
                           Kiosk
                         </a>
+                        <EventQRCode
+                          eventId={event.id}
+                          eventName={event.name}
+                          propertyAddress={event.property?.address}
+                        />
                         <button
                           onClick={() => handleStatusChange(event, "completed")}
                           className="text-xs px-2 py-1 bg-slate-50 text-slate-700 rounded hover:bg-slate-100"
