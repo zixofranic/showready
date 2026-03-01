@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { visitorSchema } from "@/lib/validations";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { pushVisitorToCRMs } from "@/lib/integrations/crm-push";
 
 /** GET /api/register/[eventId] — Public event info for QR registration */
 export async function GET(
@@ -116,6 +117,17 @@ export async function POST(
 
   // Increment visitor count
   await supabase.rpc("increment_visitor_count", { event_id: eventId });
+
+  // Fire-and-forget CRM push
+  pushVisitorToCRMs(visitor.id, eventId, {
+    id: visitor.id,
+    first_name: parsed.data.first_name,
+    last_name: parsed.data.last_name || null,
+    email: parsed.data.email || null,
+    phone: parsed.data.phone || null,
+    answers: parsed.data.answers || {},
+    source: "qr",
+  }).catch(() => {}); // Never fail the visitor response
 
   return NextResponse.json({ visitor }, { status: 201 });
 }

@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/events", label: "Events" },
   { href: "/properties", label: "Properties" },
-  { href: "/settings", label: "Settings" },
+  { href: "/settings/integrations", label: "Integrations" },
 ];
 
 export default function DashboardLayout({
