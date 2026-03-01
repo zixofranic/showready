@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useEvents } from "@/hooks/useEvents";
 import { useProperties } from "@/hooks/useProperties";
 import type { Event } from "@/types/database";
+import Link from "next/link";
 import { EventQRCode } from "@/components/EventQRCode";
+import { QuestionBuilder, type Question } from "@/components/QuestionBuilder";
 
 type Tab = "upcoming" | "live" | "completed";
 
@@ -45,6 +47,9 @@ export default function EventsPage() {
   const [endTime, setEndTime] = useState("");
   const [propertyId, setPropertyId] = useState("");
   const [kioskPin, setKioskPin] = useState("");
+  const [customQuestions, setCustomQuestions] = useState<Question[]>([]);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [thankYouMessage, setThankYouMessage] = useState("");
 
   const filtered = events.filter((e) => e.status === tab);
 
@@ -55,6 +60,9 @@ export default function EventsPage() {
     setEndTime("");
     setPropertyId("");
     setKioskPin("");
+    setCustomQuestions([]);
+    setWelcomeMessage("");
+    setThankYouMessage("");
     setError("");
   };
 
@@ -70,6 +78,9 @@ export default function EventsPage() {
         end_time: endTime || null,
         property_id: propertyId || null,
         kiosk_pin: kioskPin || null,
+        custom_questions: customQuestions.length > 0 ? customQuestions : undefined,
+        welcome_message: welcomeMessage || null,
+        thank_you_message: thankYouMessage || null,
       });
       setShowCreate(false);
       resetForm();
@@ -140,7 +151,7 @@ export default function EventsPage() {
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">
               New Event
             </h2>
@@ -232,6 +243,39 @@ export default function EventsPage() {
                 </p>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Welcome Message
+                </label>
+                <input
+                  type="text"
+                  value={welcomeMessage}
+                  onChange={(e) => setWelcomeMessage(e.target.value)}
+                  placeholder="Welcome to our Open House!"
+                  maxLength={500}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Thank You Message
+                </label>
+                <input
+                  type="text"
+                  value={thankYouMessage}
+                  onChange={(e) => setThankYouMessage(e.target.value)}
+                  placeholder="Thank you for visiting!"
+                  maxLength={500}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                />
+              </div>
+
+              <QuestionBuilder
+                questions={customQuestions}
+                onChange={setCustomQuestions}
+              />
+
               {error && (
                 <p className="text-sm text-red-600">{error}</p>
               )}
@@ -285,7 +329,9 @@ export default function EventsPage() {
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-medium text-slate-900">{event.name}</h3>
+                  <Link href={`/events/${event.id}`} className="font-medium text-slate-900 hover:text-blue-600">
+                    {event.name}
+                  </Link>
                   <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                     <span>{formatDate(event.event_date)}</span>
                     {event.start_time && (
