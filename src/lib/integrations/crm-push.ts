@@ -307,20 +307,26 @@ async function logSyncResults(
         event_id: eventId,
         integration: r.integration,
         action: "visitor_push",
-        status: r.status === "success" ? "success" : "failed",
+        status: r.status === "success" ? "success" : "retrying",
         error_message: r.error?.slice(0, 500) || null, // Truncate, no full PII in logs
       })),
     );
 
-    // Update visitor.crm_sync_status JSONB
-    const statusMap: Record<string, string> = {};
+    // Update visitor.crm_sync_status JSONB (read-merge-write to preserve other integrations)
+    const { data: existingVisitor } = await supabase
+      .from("visitors")
+      .select("crm_sync_status")
+      .eq("id", visitorId)
+      .single();
+
+    const current = (existingVisitor?.crm_sync_status as Record<string, string>) || {};
     for (const r of results) {
-      statusMap[r.integration] = r.status;
+      current[r.integration] = r.status === "success" ? "success" : "retrying";
     }
 
     await supabase
       .from("visitors")
-      .update({ crm_sync_status: statusMap })
+      .update({ crm_sync_status: current })
       .eq("id", visitorId);
   } catch (err) {
     // Logging failure should never break the flow
