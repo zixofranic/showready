@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useProperties } from "@/hooks/useProperties";
 
 function formatPrice(price: number | null): string {
@@ -267,11 +268,11 @@ export default function PropertiesPage() {
           {properties.map((prop) => (
             <div
               key={prop.id}
-              className="bg-white border border-slate-200 rounded-xl p-4 hover:border-slate-300 transition-colors"
+              className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 transition-colors"
             >
               <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-medium text-slate-900">{prop.address}</h3>
+                <Link href={`/properties/${prop.id}`} className="flex-1 min-w-0">
+                  <h3 className="font-medium text-slate-900 hover:text-blue-600 transition-colors">{prop.address}</h3>
                   {(prop.city || prop.state || prop.zip) && (
                     <p className="text-sm text-slate-500 mt-0.5">
                       {[prop.city, prop.state, prop.zip]
@@ -279,7 +280,7 @@ export default function PropertiesPage() {
                         .join(", ")}
                     </p>
                   )}
-                </div>
+                </Link>
                 <button
                   onClick={() => handleDelete(prop.id)}
                   className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded"

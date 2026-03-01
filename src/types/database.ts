@@ -16,6 +16,7 @@ export interface Property {
   photos: PropertyPhoto[];
   tour_video_url: string | null;
   listing_url: string | null;
+  aistaging_project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +37,12 @@ export interface PropertyMedia {
   room_type: string | null;
   ai_service: string | null;
   cost_cents: number;
+  style: string | null;
+  status: "pending" | "processing" | "completed" | "failed";
+  source_image_id: string | null;
+  aistaging_asset_id: string | null;
+  aistaging_job_id: string | null;
+  billing_ref: string | null;
   created_at: string;
 }
 

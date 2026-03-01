@@ -245,6 +245,31 @@ Agent clicks "Stage Kitchen" in ShowReady
 
 **Key rule:** `x-api-key` auth = SimplerPay billing. Supabase Auth = AiStaging credits. Never both.
 
+### 3.6 Retail Pricing (SimplerPay)
+
+| Service | COGS | Retail Price | Margin % | vs BoxBrownie |
+|---------|------|-------------|----------|---------------|
+| Staging (1 photo) | $0.22 | **$5.00** | 95.6% | $16-32 |
+| Twilight (1 photo) | $0.22 | **$5.00** | 95.6% | $24-48 |
+| Sky Replace (1 photo) | $0.22 | **$3.00** | 92.7% | $4-8 |
+| Declutter (1 photo) | $0.22 | **$3.00** | 92.7% | $8-16 |
+| Upscale (1 photo) | $0.06 | **$1.50** | 96.0% | N/A |
+| Tour Video (up to 12 photos) | $0.11 | **$12.00** | 99.1% | N/A |
+
+Update `AI_COSTS` → `RETAIL_PRICES` in `src/lib/billing/simplerpay.ts`.
+
+At 50 agents, 70% adoption: ~$4,000/month gross profit from a single brokerage.
+
+### 3.7 Webhook Retry (Non-negotiable)
+
+AiStaging MUST implement webhook retry with exponential backoff:
+- 3 retries: immediate, +30s, +2min
+- ShowReady polling fallback: if no webhook in 60s, poll `/api/v1/status/:jobId` every 10s for up to 5min
+- After 5min with no result: auto-refund via SimplerPay, mark as failed
+- Log every webhook attempt and response on both sides
+
+This is the #1 reliability concern. Agent pays $5, sees nothing = trust destroyed permanently.
+
 ---
 
 ## 4. Layer 2: Media Registry (Simpler OS)
@@ -362,28 +387,69 @@ CREATE INDEX idx_media_source ON media_assets(source_app, source_asset_id);
 
 ---
 
-## 5. Layer 3: Account Linking (Future — NOT built now)
+## 5. Re-staging Limits
 
-### 5.1 When to Build
+### 5.1 Policy: 3 Free Re-stages Per Original
 
-Build when agents ask to:
-- Re-stage the same photo with a different style without re-paying
-- Access their ShowReady-generated media in AiStaging's full UI
-- Use AiStaging's advanced features (custom prompts, seeds, batch processing) on ShowReady photos
+At $5.00 retail / $0.20 cost, 3 re-stages costs us $0.60, leaving $4.20 margin (84%).
 
-### 5.2 How It Would Work
+- **First staging:** $5.00 via SimplerPay (new photo, new work)
+- **Re-stages 1-3:** Free (same photo, different style)
+- **Re-stage 4+:** $5.00 again (treated as new staging, resets counter)
 
-1. AiStaging adds OAuth Provider endpoints (`/oauth/authorize`, `/oauth/token`)
-2. ShowReady adds "Link AiStaging" button in settings (same as existing "Connect Cloze")
-3. After linking, ShowReady creates properties under the agent's own AiStaging account (not service team)
-4. Agent sees everything in their AiStaging dashboard
-5. Re-staging is free (no duplicate charge — SimplerPay already paid)
+### 5.2 Enforcement (AiStaging-side)
 
-### 5.3 What Changes When Account Linking Ships
+Enforcement lives in AiStaging's `/api/v1/process`, NOT ShowReady. The processing engine is the single point of control — prevents bypass from other apps.
 
-- New properties go under agent's account (not service team)
-- Existing service team properties stay as-is (no migration needed)
-- Service team pattern remains as fallback for unlinked agents
+```sql
+-- On AiStaging database
+ALTER TABLE assets ADD COLUMN IF NOT EXISTS restage_count INTEGER DEFAULT 0;
+```
+
+Logic in `/api/v1/process`:
+1. Receive request with `image_id` + `design_style`
+2. Walk up `original_asset_id` chain to find root original
+3. Check `restage_count` on root: if >= 3, return 429 with limit info
+4. Process image, increment counter on root
+5. Return result with `restages_remaining` in response
+
+### 5.3 ShowReady UX
+
+- Button shows: "Re-stage (Free, 2 remaining)" or "Re-stage ($5.00)" when exhausted
+- Re-staging at $5.00 creates a new staging job with a fresh 3-restage counter
+
+---
+
+## 6. Layer 3: Account Linking (Email Verification — Phase D)
+
+### 6.1 When to Build
+
+Build when agents explicitly ask for:
+- AiStaging full UI access to ShowReady photos (custom prompts, batch processing)
+- Direct editing of staged photos in AiStaging's web interface
+
+**NOTE:** Re-staging does NOT require account linking — it's handled by the Service API + restage counter (Section 5).
+
+### 6.2 How It Works (Email Verification, NOT OAuth)
+
+1. Agent clicks "Link AiStaging" in ShowReady settings
+2. ShowReady sends a one-time 6-digit code to the agent's email
+3. Agent enters code in ShowReady
+4. ShowReady stores `aistaging_linked = true` and `aistaging_user_email` in agent's profile
+5. Future projects created under agent's AiStaging account (not service team)
+6. Agent logs into aistaging.pro with same email → sees ShowReady projects
+
+**Why email verification, not OAuth:**
+- 50 lines of code vs 2-3 weeks of OAuth infrastructure
+- 93% success rate vs 75% (no token refresh failures, no Safari redirect bugs)
+- No consent screens, no redirect flows, no client_id/secret rotation
+- Email mismatch is caught immediately (code goes to wrong inbox)
+
+### 6.3 What Changes When Linking Ships
+
+- Linked agents: projects go under their AiStaging account
+- Unlinked agents: service team pattern continues (no change)
+- Existing service team projects stay as-is (no migration)
 
 ---
 
@@ -487,7 +553,7 @@ Same `x-app-key` pattern as SimplerPay billing. Already built.
 | 3 | Agent has NO AiStaging account | Same flow. No account provisioning. Service team owns it. |
 | 4 | Agent signs up for AiStaging later | Zero reconciliation. Service team property is for ShowReady. Media registry shows assets in any app. |
 | 5 | Different emails across apps | Not our problem. Media registry uses ShowReady's email. Agent sees their media in ShowReady. |
-| 6 | Agent wants to re-stage with different style | Through ShowReady: pays again via SimplerPay (same photo, new style = new work). Through AiStaging (future, with account linking): can re-stage under their own account. |
+| 6 | Agent wants to re-stage with different style | 3 free re-stages per original via Service API (no account linking needed). After 3: pays $5 again (new staging, fresh counter). With account linking (Phase D): unlimited via AiStaging web UI. |
 | 7 | Agent wants staged image in PropIQ | PropIQ queries media registry by agent email + property address → gets all staged images. |
 | 8 | Agent wants to download staged image | ShowReady shows download button. URL is public. |
 | 9 | Property address changes in ShowReady | AiStaging copy is stale (acceptable — media processing doesn't need current address). |
@@ -497,34 +563,44 @@ Same `x-app-key` pattern as SimplerPay billing. Already built.
 
 ## 10. Build Order
 
-### Phase A: AiStaging Service API (Layer 1)
-1. Create service user + service team (manual, one-time)
-2. Build `POST /api/v1/projects`
-3. Build `POST /api/v1/process`
-4. Build `POST /api/v1/render`
-5. Test each endpoint with curl
+### Phase A: AiStaging Service API (Layer 1) — Week 1-2
+1. **Manual:** Create service user + service team in AiStaging Supabase Auth, set env vars
+2. Build `POST /api/v1/projects` (create/find property, import photos)
+3. Build `POST /api/v1/process` (wrap existing AI routes + restage counter + webhook retry)
+4. Build `POST /api/v1/render` (wrap Remotion Lambda)
+5. Build `GET /api/v1/health` (Decor8 + Replicate + Lambda reachability)
+6. Build `GET /api/v1/status/:jobId` (polling fallback for lost webhooks)
+7. Build `refund_usage` tool on SimplerPay billing Edge Function (Simpler OS)
+8. Update `AI_COSTS` → `RETAIL_PRICES` in ShowReady's `simplerpay.ts`
+9. Test: curl all endpoints
 
-### Phase B: ShowReady Client + Webhook (Layer 1)
-1. Migration: add `aistaging_project_id` to properties
-2. Build `src/lib/aistaging-client.ts`
-3. Build `POST /api/webhooks/aistaging`
-4. Build `POST /api/media/stage` (SimplerPay → AiStaging → webhook → property_media)
-5. Build `POST /api/media/enhance` (same pattern for 5 other services)
-6. Build `POST /api/media/video` (render endpoint)
-7. Test: MLS import → stage kitchen → verify webhook → verify property_media
+### Phase B: ShowReady Client + Webhook (Layer 1) — Week 3-4
+1. Migration: add columns to `property_media` (style, status, source_image_id, aistaging_asset_id, aistaging_job_id, billing_ref)
+2. Migration: add `aistaging_project_id` to properties
+3. Build `src/lib/aistaging-client.ts` (ensureProject, processImage, renderVideo, checkStatus)
+4. Build `POST /api/webhooks/aistaging` (receive results, update property_media, handle failures + auto-refund)
+5. Build `POST /api/media/stage` (SimplerPay charge → AiStaging call)
+6. Build `POST /api/media/enhance` (same pattern for twilight/sky/declutter/upscale)
+7. Build `POST /api/media/video` (render endpoint)
+8. Build staging UI (modal flow, processing badges via Supabase Realtime, before/after slider)
+9. Test: end-to-end with 10 test properties, 3 real agents
 
-### Phase C: Media Registry (Layer 2)
-1. Migration: create `media_assets` table on Simpler OS
-2. Build `media-registry` Edge Function (4 tools)
-3. Wire ShowReady webhook handler to register assets after save
-4. Test: stage image → verify it appears in media registry
-5. Wire PropIQ to query media registry (optional, future)
+### Phase C: Media Registry + My Media (Layer 2) — Week 5-6
+Only start after 30+ days of Phase B real agent usage.
+1. Migration: create `media_assets` table on Simpler OS (add `original_url TEXT` as first-class column)
+2. Build `media-registry` Edge Function (4 tools: register, list, get, delete)
+3. Build shared `normalizeAddress()` utility (used by all apps)
+4. Wire ShowReady webhook handler to register assets after save
+5. Build My Media gallery on simpleros.com (full Myra design: 4 filters, search, grid, detail modal)
+6. Test: stage in ShowReady → appears in My Media within 10 seconds
+7. Wire PropIQ to query media registry (when PropIQ exists)
 
-### Phase D: Account Linking (Layer 3 — Future)
-- Only when agents need re-staging across apps
-- Build OAuth provider on AiStaging
-- Build "Link AiStaging" in ShowReady settings
-- Migrate new properties to agent's account (service team = fallback for unlinked)
+### Phase D: Account Linking (Layer 3 — Future, email verification)
+Only when agents explicitly ask for AiStaging full UI access. NOT needed for re-staging.
+1. Build email verification flow (6-digit code, 50 lines)
+2. Add "Link AiStaging" in ShowReady settings
+3. Switch linked agents from service team to personal AiStaging account
+4. Service team remains fallback for unlinked agents
 
 ---
 
@@ -554,10 +630,14 @@ CROSS_APP_API_KEY=<shared-secret>
 
 ## 12. What NOT to Build
 
-- No SSO (future, not now)
+- No OAuth for account linking (use email verification instead — 50 lines vs 2-3 weeks)
+- No SSO across apps (future, not now)
 - No shared property database between apps
 - No Remotion Player in ShowReady (videos are MP4s)
 - No direct Decor8/Replicate API calls from ShowReady
 - No email-based user lookup across apps
 - No auto-provisioning of AiStaging accounts
 - No property sync between apps
+- No countdown timer in processing UI (use "Usually under 30 seconds")
+- No cancel button during processing (Decor8 jobs can't be cancelled mid-flight)
+- No push notifications for v1 (use Supabase Realtime + email fallback)

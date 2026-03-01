@@ -150,15 +150,33 @@ export function makeIdempotencyKey(
   return `${action}_${propertyId}${suffix}_${dateBucket}`;
 }
 
-// Cost table for AI services (cents)
-// TODO(chunk-3.2): Fetch from SimplerPay price_catalog instead of hardcoding
-export const AI_COSTS = {
-  staging: 20,       // $0.20 per image
-  twilight: 20,      // $0.20 per image
-  sky_replace: 20,   // $0.20 per image
-  declutter: 20,     // $0.20 per image
-  upscale: 10,       // $0.10 per image
-  tour_video: 1500,  // $15.00 per video
+// Retail prices charged to agents (cents)
+// COGS: staging/twilight/sky/declutter $0.22, upscale $0.06, video $0.11
+// TODO: Fetch from SimplerPay price_catalog instead of hardcoding
+export const RETAIL_PRICES = {
+  staging: 500,       // $5.00 per image
+  twilight: 500,      // $5.00 per image
+  sky_replace: 300,   // $3.00 per image
+  declutter: 300,     // $3.00 per image
+  upscale: 150,       // $1.50 per image
+  tour_video: 1200,   // $12.00 per video
 } as const;
 
-export type AIService = keyof typeof AI_COSTS;
+export type AIService = keyof typeof RETAIL_PRICES;
+
+/** @deprecated Use RETAIL_PRICES instead */
+export const AI_COSTS = RETAIL_PRICES;
+
+/**
+ * Refund a previously reported usage by idempotency key.
+ * Calls the refund_usage tool on SimplerPay billing EF.
+ */
+export async function refundUsage(
+  idempotencyKey: string,
+  reason: string,
+): Promise<BillingResult<{ refunded: boolean }>> {
+  return callBilling<{ refunded: boolean }>("refund_usage", {
+    idempotency_key: idempotencyKey,
+    reason,
+  });
+}
