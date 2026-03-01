@@ -38,6 +38,33 @@ const SOURCE_LABELS: Record<string, string> = {
   import: "Import",
 };
 
+const CRM_COLORS: Record<string, { success: string; retrying: string; failed: string; label: string }> = {
+  cloze: { success: "bg-orange-500", retrying: "bg-orange-300", failed: "bg-red-400", label: "Cloze" },
+  fub: { success: "bg-emerald-500", retrying: "bg-emerald-300", failed: "bg-red-400", label: "FUB" },
+  zapier: { success: "bg-amber-500", retrying: "bg-amber-300", failed: "bg-red-400", label: "Zapier" },
+};
+
+function CrmSyncBadges({ status }: { status: Record<string, string> }) {
+  const entries = Object.entries(status);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1">
+      {entries.map(([crm, state]) => {
+        const colors = CRM_COLORS[crm] || { success: "bg-green-500", retrying: "bg-yellow-300", failed: "bg-red-400", label: crm };
+        const dotColor = state === "success" ? colors.success : state === "retrying" ? colors.retrying : colors.failed;
+        return (
+          <span
+            key={crm}
+            title={`${colors.label}: ${state}`}
+            className={`inline-block w-2 h-2 rounded-full ${dotColor}`}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 export default function EventDetailPage({
   params,
 }: {
@@ -247,6 +274,7 @@ export default function EventDetailPage({
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Contact</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Source</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Time</th>
+                  <th className="text-left py-3 px-4 font-medium text-slate-600">CRM</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-slate-600 w-10"></th>
                 </tr>
@@ -291,6 +319,9 @@ export default function EventDetailPage({
                     </td>
                     <td className="py-3 px-4">
                       <span className="text-xs text-slate-400">{timeAgo(v.created_at)}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <CrmSyncBadges status={v.crm_sync_status || {}} />
                     </td>
                     <td className="py-3 px-4">
                       <button

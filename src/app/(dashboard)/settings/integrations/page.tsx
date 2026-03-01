@@ -14,11 +14,26 @@ interface ZapierStatus {
   webhook_url_preview?: string | null;
 }
 
+interface IntegrationSettings {
+  push_visitors: boolean;
+  create_todos: boolean;
+  log_timeline: boolean;
+}
+
+type AllSettings = Record<string, IntegrationSettings>;
+
+const DEFAULT_SETTINGS: IntegrationSettings = {
+  push_visitors: true,
+  create_todos: true,
+  log_timeline: true,
+};
+
 export default function IntegrationsPage() {
   const searchParams = useSearchParams();
   const [cloze, setCloze] = useState<IntegrationStatus>({ connected: false });
   const [fub, setFub] = useState<IntegrationStatus>({ connected: false });
   const [zapier, setZapier] = useState<ZapierStatus>({ connected: false });
+  const [settings, setSettings] = useState<AllSettings>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -41,14 +56,16 @@ export default function IntegrationsPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const [clozeRes, fubRes, zapierRes] = await Promise.all([
+      const [clozeRes, fubRes, zapierRes, settingsRes] = await Promise.all([
         fetch("/api/integrations/cloze"),
         fetch("/api/integrations/fub"),
         fetch("/api/integrations/zapier"),
+        fetch("/api/integrations/settings"),
       ]);
       if (clozeRes.ok) setCloze(await clozeRes.json());
       if (fubRes.ok) setFub(await fubRes.json());
       if (zapierRes.ok) setZapier(await zapierRes.json());
+      if (settingsRes.ok) setSettings(await settingsRes.json());
     } finally {
       setLoading(false);
     }
@@ -230,6 +247,65 @@ export default function IntegrationsPage() {
     }
   }
 
+  // ── Settings toggle handler ──
+
+  async function handleToggle(integration: string, key: keyof IntegrationSettings, value: boolean) {
+    // Optimistic update
+    setSettings((prev) => ({
+      ...prev,
+      [integration]: { ...(prev[integration] || DEFAULT_SETTINGS), [key]: value },
+    }));
+
+    const res = await fetch("/api/integrations/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ integration, settings: { [key]: value } }),
+    });
+
+    if (!res.ok) {
+      // Revert on failure
+      setSettings((prev) => ({
+        ...prev,
+        [integration]: { ...(prev[integration] || DEFAULT_SETTINGS), [key]: !value },
+      }));
+      setToast("Failed to update setting");
+    }
+  }
+
+  function SettingsToggles({ integration }: { integration: string }) {
+    const s = settings[integration] || DEFAULT_SETTINGS;
+    const toggles: Array<{ key: keyof IntegrationSettings; label: string; desc: string }> = [
+      { key: "push_visitors", label: "Push visitors", desc: "Send visitor data to this CRM" },
+      { key: "create_todos", label: "Create follow-ups", desc: "Auto-create follow-up tasks" },
+      { key: "log_timeline", label: "Log timeline", desc: "Add visit notes to contact timeline" },
+    ];
+
+    return (
+      <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+        {toggles.map((t) => (
+          <div key={t.key} className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-slate-700">{t.label}</p>
+              <p className="text-xs text-slate-400">{t.desc}</p>
+            </div>
+            <button
+              onClick={() => handleToggle(integration, t.key, !s[t.key])}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                s[t.key] ? "bg-blue-600" : "bg-slate-200"
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                  s[t.key] ? "translate-x-4" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -307,6 +383,7 @@ export default function IntegrationsPage() {
                   Disconnect
                 </button>
               </div>
+              <SettingsToggles integration="cloze" />
             </div>
           )}
 
@@ -411,6 +488,7 @@ export default function IntegrationsPage() {
                   Disconnect
                 </button>
               </div>
+              <SettingsToggles integration="fub" />
             </div>
           )}
 
@@ -502,6 +580,7 @@ export default function IntegrationsPage() {
                   Disconnect
                 </button>
               </div>
+              <SettingsToggles integration="zapier" />
             </div>
           )}
 

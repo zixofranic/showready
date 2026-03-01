@@ -14,6 +14,18 @@ import { pushFUBEvent } from "./fub/client";
 import { loadZapierCredentials, pushZapierWebhook } from "./zapier/client";
 import { normalizePhone } from "./phone";
 
+interface IntegrationSettings {
+  push_visitors: boolean;
+  create_todos: boolean;
+  log_timeline: boolean;
+}
+
+const DEFAULT_SETTINGS: IntegrationSettings = {
+  push_visitors: true,
+  create_todos: true,
+  log_timeline: true,
+};
+
 interface VisitorData {
   id: string;
   first_name: string;
@@ -41,6 +53,33 @@ interface ResolvedContext {
   } | null;
 }
 
+/** Load integration settings from credentials table */
+async function loadIntegrationSettings(
+  userId: string,
+  integration: string,
+): Promise<IntegrationSettings> {
+  try {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .from("integration_credentials")
+      .select("settings")
+      .eq("user_id", userId)
+      .eq("integration", integration)
+      .eq("is_active", true)
+      .single();
+
+    if (!data?.settings) return DEFAULT_SETTINGS;
+    const s = data.settings as Record<string, boolean>;
+    return {
+      push_visitors: s.push_visitors !== false,
+      create_todos: s.create_todos !== false,
+      log_timeline: s.log_timeline !== false,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
 /**
  * Push a visitor to all enabled CRMs.
  * Self-resolves all context from visitor ID + event data.
@@ -61,8 +100,11 @@ export async function pushVisitorToCRMs(
     try {
       const creds = await loadCredentials(ctx.userId);
       if (creds) {
-        const clozeResult = await pushToCloze(ctx);
-        results.push({ integration: "cloze", ...clozeResult });
+        const s = await loadIntegrationSettings(ctx.userId, "cloze");
+        if (s.push_visitors) {
+          const clozeResult = await pushToCloze(ctx, s);
+          results.push({ integration: "cloze", ...clozeResult });
+        }
       }
     } catch (err) {
       results.push({
@@ -76,8 +118,11 @@ export async function pushVisitorToCRMs(
     try {
       const fubCreds = await loadFUBCredentials(ctx.userId);
       if (fubCreds) {
-        const fubResult = await pushToFUB(ctx);
-        results.push({ integration: "fub", ...fubResult });
+        const s = await loadIntegrationSettings(ctx.userId, "fub");
+        if (s.push_visitors) {
+          const fubResult = await pushToFUB(ctx);
+          results.push({ integration: "fub", ...fubResult });
+        }
       }
     } catch (err) {
       results.push({
@@ -91,8 +136,11 @@ export async function pushVisitorToCRMs(
     try {
       const zapCreds = await loadZapierCredentials(ctx.userId);
       if (zapCreds) {
-        const zapResult = await pushToZapier(ctx);
-        results.push({ integration: "zapier", ...zapResult });
+        const s = await loadIntegrationSettings(ctx.userId, "zapier");
+        if (s.push_visitors) {
+          const zapResult = await pushToZapier(ctx);
+          results.push({ integration: "zapier", ...zapResult });
+        }
       }
     } catch (err) {
       results.push({
@@ -152,6 +200,7 @@ async function resolveContext(
 
 async function pushToCloze(
   ctx: ResolvedContext,
+  settings: IntegrationSettings,
 ): Promise<{ status: string; error?: string }> {
   const { userId, visitor, agentEmail } = ctx;
   const phone = visitor.phone ? normalizePhone(visitor.phone) : undefined;
@@ -168,7 +217,6 @@ async function pushToCloze(
     return { status: "failed", error: personResult.error };
   }
 
-  // 2. Timeline note — from = agent email (NOT visitor!)
   const propertyInfo = ctx.property
     ? `${ctx.property.address}${ctx.property.city ? `, ${ctx.property.city}` : ""}${ctx.property.state ? ` ${ctx.property.state}` : ""}`
     : "Unknown property";
@@ -177,46 +225,55 @@ async function pushToCloze(
     ? ` ($${Number(ctx.property.price).toLocaleString()})`
     : "";
 
-  const answersText =
-    Object.keys(visitor.answers).length > 0
-      ? "\n\nCustom Answers:\n" +
-        Object.entries(visitor.answers)
-          .map(([q, a]) => `- ${q}: ${a}`)
-          .join("\n")
-      : "";
+  // 2. Timeline note — from = agent email (NOT visitor!)
+  let timelineOk = true;
+  if (settings.log_timeline) {
+    const answersText =
+      Object.keys(visitor.answers).length > 0
+        ? "\n\nCustom Answers:\n" +
+          Object.entries(visitor.answers)
+            .map(([q, a]) => `- ${q}: ${a}`)
+            .join("\n")
+        : "";
 
-  const timelineResult = await createTimelineNote(userId, {
-    type: "note",
-    subject: `Open House Visit — ${propertyInfo}`,
-    body:
-      `${visitor.first_name}${visitor.last_name ? " " + visitor.last_name : ""} visited open house at ${propertyInfo}${priceStr}.\n` +
-      `Event: ${ctx.eventName} (${ctx.eventDate})\n` +
-      `Source: ${visitor.source}` +
-      (visitor.phone ? `\nPhone: ${phone || visitor.phone}` : "") +
-      answersText,
-    from: agentEmail, // CRITICAL: agent email, never visitor
-    to: visitor.email || undefined,
-    date: new Date().toISOString(),
-  });
+    const timelineResult = await createTimelineNote(userId, {
+      type: "note",
+      subject: `Open House Visit — ${propertyInfo}`,
+      body:
+        `${visitor.first_name}${visitor.last_name ? " " + visitor.last_name : ""} visited open house at ${propertyInfo}${priceStr}.\n` +
+        `Event: ${ctx.eventName} (${ctx.eventDate})\n` +
+        `Source: ${visitor.source}` +
+        (visitor.phone ? `\nPhone: ${phone || visitor.phone}` : "") +
+        answersText,
+      from: agentEmail, // CRITICAL: agent email, never visitor
+      to: visitor.email || undefined,
+      date: new Date().toISOString(),
+    });
+    timelineOk = timelineResult.ok;
+  }
 
   // 3. Follow-up todo — due next morning 9am
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(9, 0, 0, 0);
+  let todoOk = true;
+  if (settings.create_todos) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
 
-  const todoResult = await createTodo(userId, {
-    subject: `Follow up with ${visitor.first_name} from ${ctx.eventName}`,
-    body: `Visited ${propertyInfo}${priceStr} via ${visitor.source}. ${visitor.email ? `Email: ${visitor.email}` : "No email provided."}`,
-    from: agentEmail, // CRITICAL: agent email, never visitor
-    due: tomorrow.toISOString(),
-    priority: "normal",
-  });
+    const todoResult = await createTodo(userId, {
+      subject: `Follow up with ${visitor.first_name} from ${ctx.eventName}`,
+      body: `Visited ${propertyInfo}${priceStr} via ${visitor.source}. ${visitor.email ? `Email: ${visitor.email}` : "No email provided."}`,
+      from: agentEmail, // CRITICAL: agent email, never visitor
+      due: tomorrow.toISOString(),
+      priority: "normal",
+    });
+    todoOk = todoResult.ok;
+  }
 
   // Report partial if timeline or todo failed
-  if (!timelineResult.ok || !todoResult.ok) {
+  if (!timelineOk || !todoOk) {
     const failures = [
-      !timelineResult.ok && "timeline",
-      !todoResult.ok && "todo",
+      !timelineOk && "timeline",
+      !todoOk && "todo",
     ].filter(Boolean).join(", ");
     return { status: "partial", error: `Person created but ${failures} failed` };
   }
