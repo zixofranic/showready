@@ -50,7 +50,8 @@ export const visitorSchema = z.object({
   last_name: z.string().max(100).optional().nullable(),
   email: z.string().email().max(254).optional().nullable().or(z.literal("")),
   phone: z.string().max(20).optional().nullable(),
-  answers: z.record(z.string(), z.string()).optional(),
+  answers: z.record(z.string().max(100), z.string().max(1000)).optional()
+    .refine((val) => !val || Object.keys(val).length <= 10, "Too many answers"),
   source: z.enum(["kiosk", "qr", "manual", "import"]).optional(),
   notes: z.string().max(2000).optional().nullable(),
 });
