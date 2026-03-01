@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 /** POST /api/kiosk/[eventId]/verify-pin — Verify PIN to exit kiosk */
 export async function POST(
@@ -7,14 +8,31 @@ export async function POST(
   { params }: { params: Promise<{ eventId: string }> },
 ) {
   const { eventId } = await params;
-  const supabase = await createServiceClient();
 
-  const body = await request.json();
+  // Rate limit: 5 attempts per minute per IP (brute-force protection)
+  const ip = getClientIp(request);
+  const limited = checkRateLimit(`pin:${ip}:${eventId}`, 5, 60_000);
+  if (limited) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please wait a moment." },
+      { status: 429 },
+    );
+  }
+
+  let body: { pin?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
   const pin = body.pin;
 
   if (!pin || typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
     return NextResponse.json({ error: "Invalid PIN format" }, { status: 400 });
   }
+
+  const supabase = await createServiceClient();
 
   const { data: event, error } = await supabase
     .from("events")

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { visitorSchema } from "@/lib/validations";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 /** GET /api/kiosk/[eventId] — Public event info for kiosk display */
 export async function GET(
@@ -38,6 +39,24 @@ export async function POST(
   { params }: { params: Promise<{ eventId: string }> },
 ) {
   const { eventId } = await params;
+
+  // Rate limit: 10 submissions per minute per IP per event
+  const ip = getClientIp(request);
+  const limited = checkRateLimit(`kiosk:${ip}:${eventId}`, 10, 60_000);
+  if (limited) {
+    return NextResponse.json(
+      { error: "Too many submissions. Please wait a moment." },
+      { status: 429 },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
   const supabase = await createServiceClient();
 
   // Verify event exists and is live
@@ -58,7 +77,6 @@ export async function POST(
     );
   }
 
-  const body = await request.json();
   const parsed = visitorSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
