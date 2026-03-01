@@ -136,16 +136,18 @@ export async function getUsageHistory(
 }
 
 /**
- * Generate an idempotency key for a billable action.
- * Format: {action}_{property_id}_{timestamp}_{random}
+ * Generate a deterministic idempotency key for a billable action.
+ * Same inputs on retry produce the same key — prevents double-charges.
+ * Format: {action}_{property_id}_{parts}_{date_bucket}
  */
 export function makeIdempotencyKey(
   action: string,
   propertyId: string,
+  ...parts: string[]
 ): string {
-  const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `${action}_${propertyId}_${ts}_${rand}`;
+  const dateBucket = new Date().toISOString().slice(0, 10); // "2026-02-28"
+  const suffix = parts.length > 0 ? `_${parts.join("_")}` : "";
+  return `${action}_${propertyId}${suffix}_${dateBucket}`;
 }
 
 // Cost table for AI services (cents)
