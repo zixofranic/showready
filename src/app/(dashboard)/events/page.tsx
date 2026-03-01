@@ -317,12 +317,22 @@ export default function EventsPage() {
                       </button>
                     )}
                     {event.status === "live" && (
-                      <button
-                        onClick={() => handleStatusChange(event, "completed")}
-                        className="text-xs px-2 py-1 bg-slate-50 text-slate-700 rounded hover:bg-slate-100"
-                      >
-                        End
-                      </button>
+                      <>
+                        <a
+                          href={`/kiosk/${event.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
+                        >
+                          Kiosk
+                        </a>
+                        <button
+                          onClick={() => handleStatusChange(event, "completed")}
+                          className="text-xs px-2 py-1 bg-slate-50 text-slate-700 rounded hover:bg-slate-100"
+                        >
+                          End
+                        </button>
+                      </>
                     )}
                     <button
                       onClick={() => handleDelete(event.id)}
