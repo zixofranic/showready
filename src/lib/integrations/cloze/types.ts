@@ -27,6 +27,9 @@ export interface ClozePerson {
   emails?: Array<{ value: string }>;
   phones?: Array<{ value: string }>;
   keywords?: string[];
+  stage?: string;
+  segment?: string;
+  notes?: string;
 }
 
 export interface ClozeTimelineEntry {

@@ -211,6 +211,8 @@ async function pushToCloze(
     emails: visitor.email ? [{ value: visitor.email }] : undefined,
     phones: phone ? [{ value: phone }] : undefined,
     keywords: ["open-house-visitor", `event:${ctx.eventName}`],
+    stage: "lead",
+    segment: "customer",
   });
 
   if (!personResult.ok) {

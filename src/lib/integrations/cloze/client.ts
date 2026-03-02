@@ -205,7 +205,7 @@ export async function pushPerson(
   userId: string,
   person: ClozePerson,
 ): Promise<{ ok: boolean; error?: string }> {
-  return clozeApi("POST", "/createperson", userId, person);
+  return clozeApi("POST", "/people/create", userId, person);
 }
 
 /** Add a timeline note (from = agent email!) */
@@ -213,7 +213,20 @@ export async function createTimelineNote(
   userId: string,
   entry: ClozeTimelineEntry,
 ): Promise<{ ok: boolean; error?: string }> {
-  return clozeApi("POST", "/timeline", userId, entry);
+  // Build the full content record format that Cloze expects
+  const record = {
+    style: "note",
+    uniqueid: `showready-note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    source: "showready.app",
+    from: entry.from,
+    date: entry.date || new Date().toISOString(),
+    subject: entry.subject,
+    body: entry.body,
+    references: entry.to
+      ? [{ type: "person", value: entry.to }]
+      : undefined,
+  };
+  return clozeApi("POST", "/timeline/content/create", userId, record);
 }
 
 /** Create a follow-up todo (from = agent email!) */
@@ -221,7 +234,18 @@ export async function createTodo(
   userId: string,
   todo: ClozeTodo,
 ): Promise<{ ok: boolean; error?: string }> {
-  return clozeApi("POST", "/todo", userId, todo);
+  const record = {
+    style: "todo",
+    uniqueid: `showready-todo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    source: "showready.app",
+    from: todo.from,
+    date: new Date().toISOString(),
+    due: todo.due,
+    subject: todo.subject,
+    body: todo.body,
+    priority: todo.priority,
+  };
+  return clozeApi("POST", "/timeline/content/create", userId, record);
 }
 
 /** Get profile (verify connection) */
