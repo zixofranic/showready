@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getBestPhoto, type PropertyPhoto } from "@/lib/property-media";
+import { PhotoSlideshow } from "@/components/PhotoSlideshow";
 
 interface EventInfo {
   id: string;
@@ -17,6 +18,7 @@ interface EventInfo {
     logo_url?: string;
     primary_color?: string;
     agent_photo?: string;
+    media_display?: "auto" | "video" | "slideshow" | "photo";
   };
   property: {
     address: string;
@@ -199,6 +201,23 @@ export default function KioskPage({
   const primaryColor = event?.branding?.primary_color || "#2563eb";
   const bestPhoto = getBestPhoto(event?.property?.photos);
   const videoUrl = event?.property?.tour_video_url || null;
+  const photos = event?.property?.photos || [];
+  const photoUrls = photos.map((p) => p.staged_url || p.url).slice(0, 5);
+
+  // Resolve media display mode
+  const mediaDisplayPref = event?.branding?.media_display || "auto";
+  const resolvedMedia = (() => {
+    if (mediaDisplayPref === "video" && videoUrl) return "video" as const;
+    if (mediaDisplayPref === "slideshow" && photoUrls.length >= 2) return "slideshow" as const;
+    if (mediaDisplayPref === "photo" && bestPhoto) return "photo" as const;
+    // Auto: video > slideshow > photo > gradient
+    if (mediaDisplayPref === "auto") {
+      if (videoUrl) return "video" as const;
+      if (photoUrls.length >= 2) return "slideshow" as const;
+      if (bestPhoto) return "photo" as const;
+    }
+    return "gradient" as const;
+  })();
 
   // --- Screens ---
 
@@ -371,18 +390,23 @@ export default function KioskPage({
       {screen === "welcome" ? (
         // --- Welcome Screen: Split-screen layout ---
         <div className="flex-1 flex flex-col md:flex-row">
-          {/* LEFT: Property media (photo or video) */}
+          {/* LEFT: Property media */}
           <div className="relative h-[40vh] md:h-auto md:w-1/2 overflow-hidden">
-            {videoUrl ? (
+            {resolvedMedia === "video" ? (
               <video
-                src={videoUrl}
+                src={videoUrl!}
                 autoPlay
                 loop
                 muted
                 playsInline
                 className="absolute inset-0 w-full h-full object-cover"
               />
-            ) : bestPhoto ? (
+            ) : resolvedMedia === "slideshow" ? (
+              <PhotoSlideshow
+                photos={photoUrls}
+                className="absolute inset-0 w-full h-full"
+              />
+            ) : resolvedMedia === "photo" ? (
               <div
                 className="absolute inset-0 bg-cover bg-center"
                 style={{ backgroundImage: `url(${bestPhoto})` }}

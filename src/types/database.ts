@@ -16,7 +16,6 @@ export interface Property {
   photos: PropertyPhoto[];
   tour_video_url: string | null;
   listing_url: string | null;
-  aistaging_project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,9 +39,6 @@ export interface PropertyMedia {
   style: string | null;
   status: "pending" | "processing" | "completed" | "failed";
   source_image_id: string | null;
-  aistaging_asset_id: string | null;
-  aistaging_job_id: string | null;
-  billing_ref: string | null;
   created_at: string;
 }
 
@@ -81,6 +77,7 @@ export interface EventBranding {
   logo_url?: string;
   primary_color?: string;
   agent_photo?: string;
+  media_display?: "auto" | "video" | "slideshow" | "photo";
 }
 
 export interface Visitor {

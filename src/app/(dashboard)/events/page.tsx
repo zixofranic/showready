@@ -50,6 +50,7 @@ export default function EventsPage() {
   const [customQuestions, setCustomQuestions] = useState<Question[]>([]);
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [thankYouMessage, setThankYouMessage] = useState("");
+  const [mediaDisplay, setMediaDisplay] = useState<"auto" | "video" | "slideshow" | "photo">("auto");
 
   const filtered = events.filter((e) => e.status === tab);
 
@@ -63,6 +64,7 @@ export default function EventsPage() {
     setCustomQuestions([]);
     setWelcomeMessage("");
     setThankYouMessage("");
+    setMediaDisplay("auto");
     setError("");
   };
 
@@ -81,6 +83,7 @@ export default function EventsPage() {
         custom_questions: customQuestions.length > 0 ? customQuestions : undefined,
         welcome_message: welcomeMessage || null,
         thank_you_message: thankYouMessage || null,
+        branding: mediaDisplay !== "auto" ? { media_display: mediaDisplay } : undefined,
       });
       setShowCreate(false);
       resetForm();
@@ -270,6 +273,27 @@ export default function EventsPage() {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
                 />
               </div>
+
+              {propertyId && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Kiosk Media Display
+                  </label>
+                  <select
+                    value={mediaDisplay}
+                    onChange={(e) => setMediaDisplay(e.target.value as typeof mediaDisplay)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                  >
+                    <option value="auto">Auto (video &gt; slideshow &gt; photo)</option>
+                    <option value="video">Video only</option>
+                    <option value="slideshow">Photo slideshow</option>
+                    <option value="photo">Single photo</option>
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">
+                    What visitors see on the kiosk welcome screen
+                  </p>
+                </div>
+              )}
 
               <QuestionBuilder
                 questions={customQuestions}

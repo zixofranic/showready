@@ -38,6 +38,12 @@ export const eventSchema = z.object({
   custom_questions: z.array(customQuestionSchema).max(5).optional(),
   welcome_message: z.string().max(500).optional().nullable(),
   thank_you_message: z.string().max(500).optional().nullable(),
+  branding: z.object({
+    logo_url: z.string().url().optional(),
+    primary_color: z.string().max(20).optional(),
+    agent_photo: z.string().url().optional(),
+    media_display: z.enum(["auto", "video", "slideshow", "photo"]).optional(),
+  }).optional(),
   team_id: z.string().uuid().optional().nullable(),
 });
 
