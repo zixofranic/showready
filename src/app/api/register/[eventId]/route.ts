@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { visitorSchema } from "@/lib/validations";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
@@ -118,16 +119,22 @@ export async function POST(
   // Increment visitor count
   await supabase.rpc("increment_visitor_count", { event_id: eventId });
 
-  // Fire-and-forget CRM push
-  pushVisitorToCRMs(visitor.id, eventId, {
-    id: visitor.id,
-    first_name: parsed.data.first_name,
-    last_name: parsed.data.last_name || null,
-    email: parsed.data.email || null,
-    phone: parsed.data.phone || null,
-    answers: parsed.data.answers || {},
-    source: "qr",
-  }).catch(() => {}); // Never fail the visitor response
+  // CRM push runs after response is sent (keeps serverless function alive)
+  after(async () => {
+    try {
+      await pushVisitorToCRMs(visitor.id, eventId, {
+        id: visitor.id,
+        first_name: parsed.data.first_name,
+        last_name: parsed.data.last_name || null,
+        email: parsed.data.email || null,
+        phone: parsed.data.phone || null,
+        answers: parsed.data.answers || {},
+        source: "qr",
+      });
+    } catch (err) {
+      console.error("[Register] CRM push failed:", err instanceof Error ? err.message : err);
+    }
+  });
 
   return NextResponse.json({ visitor }, { status: 201 });
 }
