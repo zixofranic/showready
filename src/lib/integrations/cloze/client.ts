@@ -158,7 +158,15 @@ async function clozeApi(
     return { ok: false, error: `Cloze API ${res.status}: ${text.slice(0, 200)}` };
   }
 
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+
+  // Cloze returns HTTP 200 with errorcode != 0 for many failures
+  if (data.errorcode && data.errorcode !== 0) {
+    const msg = (data.message as string) || `errorcode ${data.errorcode}`;
+    console.error(`[Cloze API] ${path} returned errorcode ${data.errorcode}: ${msg}`);
+    return { ok: false, error: `Cloze error: ${msg}` };
+  }
+
   return { ok: true, data };
 }
 
@@ -208,41 +216,43 @@ export async function pushPerson(
   return clozeApi("POST", "/people/create", userId, person);
 }
 
-/** Add a timeline note (from = agent email!) */
+/** Add a timeline note — uses /createcontent (proven WP toolkit pattern) */
 export async function createTimelineNote(
   userId: string,
   entry: ClozeTimelineEntry,
 ): Promise<{ ok: boolean; error?: string }> {
-  // Build the full content record format that Cloze expects
+  const now = Date.now();
   const record = {
+    uniqueid: `showready-note-${now}-${Math.random().toString(36).slice(2, 8)}`,
     style: "note",
-    uniqueid: `showready-note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    source: "showready.app",
-    from: entry.from,
-    date: entry.date || new Date().toISOString(),
+    from: entry.to || entry.from, // from = contact identifier so note appears on their profile
     subject: entry.subject,
     body: entry.body,
-    references: entry.to
-      ? [{ type: "person", value: entry.to, name: entry.toName }]
-      : undefined,
+    source: "showready.vercel.app",
+    date: now,
   };
-  return clozeApi("POST", "/timeline/content/create", userId, record);
+  return clozeApi("POST", "/createcontent", userId, record);
 }
 
-/** Create a follow-up todo (QuickTag-proven /timeline/todo/create endpoint) */
+/** Create a follow-up todo — uses /createcontent style:todo (proven WP toolkit pattern) */
 export async function createTodo(
   userId: string,
   todo: ClozeTodo,
 ): Promise<{ ok: boolean; error?: string }> {
-  const record: Record<string, unknown> = {
+  const now = Date.now();
+  // Calculate due date as epoch ms
+  const dueMs = todo.due ? new Date(todo.due).getTime() : now;
+  const record = {
+    uniqueid: `showready-todo-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    style: "todo",
+    from: todo.participants?.[0] || todo.from, // from = contact identifier so todo links to them
     subject: todo.subject,
-    when: todo.due || new Date().toISOString(),
+    body: todo.body,
+    source: "showready.vercel.app",
+    date: now,
+    due: dueMs,
   };
-  // participants links the todo to the contact in Cloze agenda
-  if (todo.participants && todo.participants.length > 0) {
-    record.participants = todo.participants;
-  }
-  return clozeApi("POST", "/timeline/todo/create", userId, record);
+  return clozeApi("POST", "/createcontent", userId, record);
 }
 
 /** Get profile (verify connection) */

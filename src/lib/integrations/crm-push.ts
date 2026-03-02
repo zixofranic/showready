@@ -205,20 +205,7 @@ async function pushToCloze(
   const { userId, visitor, agentEmail } = ctx;
   const phone = visitor.phone ? normalizePhone(visitor.phone) : undefined;
 
-  // 1. Create/update person in Cloze
-  const personResult = await pushPerson(userId, {
-    name: [visitor.first_name, visitor.last_name].filter(Boolean).join(" "),
-    emails: visitor.email ? [{ value: visitor.email }] : undefined,
-    phones: phone ? [{ value: phone }] : undefined,
-    keywords: ["open-house-visitor", `event:${ctx.eventName}`],
-    stage: "lead",
-    segment: "customer",
-  });
-
-  if (!personResult.ok) {
-    return { status: "failed", error: personResult.error };
-  }
-
+  // 1. Create/update person in Cloze — include property as note
   const propertyInfo = ctx.property
     ? `${ctx.property.address}${ctx.property.city ? `, ${ctx.property.city}` : ""}${ctx.property.state ? ` ${ctx.property.state}` : ""}`
     : "Unknown property";
@@ -226,6 +213,20 @@ async function pushToCloze(
   const priceStr = ctx.property?.price
     ? ` ($${Number(ctx.property.price).toLocaleString()})`
     : "";
+
+  const personResult = await pushPerson(userId, {
+    name: [visitor.first_name, visitor.last_name].filter(Boolean).join(" "),
+    emails: visitor.email ? [{ value: visitor.email }] : undefined,
+    phones: phone ? [{ value: phone }] : undefined,
+    keywords: ["open-house-visitor", `event:${ctx.eventName}`],
+    stage: "lead",
+    segment: "customer",
+    notes: `Open house visitor at ${propertyInfo}${priceStr} — ${ctx.eventName} (${ctx.eventDate}). Source: ${visitor.source}`,
+  });
+
+  if (!personResult.ok) {
+    return { status: "failed", error: personResult.error };
+  }
 
   // 2. Timeline note — from = agent email (NOT visitor!)
   let timelineOk = true;
@@ -269,9 +270,9 @@ async function pushToCloze(
     else if (visitor.email) participants.push(visitor.email);
 
     const todoResult = await createTodo(userId, {
-      subject: `Follow up with ${visitor.first_name} from ${ctx.eventName}`,
-      body: `Visited ${propertyInfo}${priceStr} via ${visitor.source}. ${visitor.email ? `Email: ${visitor.email}` : "No email provided."}`,
-      from: agentEmail, // CRITICAL: agent email, never visitor
+      subject: `Follow up: ${visitor.first_name} — ${propertyInfo}`,
+      body: `Visited open house at ${propertyInfo}${priceStr} via ${visitor.source}. Event: ${ctx.eventName} (${ctx.eventDate}). ${visitor.email ? `Email: ${visitor.email}` : "No email."} ${phone ? `Phone: ${phone}` : ""}`,
+      from: agentEmail,
       due: tomorrow.toISOString(),
       participants,
     });
