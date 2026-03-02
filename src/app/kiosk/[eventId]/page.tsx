@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { getBestPhoto, type PropertyPhoto } from "@/lib/property-media";
 
 interface EventInfo {
   id: string;
@@ -21,7 +22,8 @@ interface EventInfo {
     address: string;
     city: string | null;
     state: string | null;
-    photos: { url: string }[];
+    photos: PropertyPhoto[];
+    tour_video_url: string | null;
   } | null;
 }
 
@@ -195,6 +197,8 @@ export default function KioskPage({
   };
 
   const primaryColor = event?.branding?.primary_color || "#2563eb";
+  const bestPhoto = getBestPhoto(event?.property?.photos);
+  const videoUrl = event?.property?.tour_video_url || null;
 
   // --- Screens ---
 
@@ -312,11 +316,21 @@ export default function KioskPage({
 
   if (screen === "thankyou") {
     return (
-      <div
-        className="fixed inset-0 flex flex-col items-center justify-center"
-        style={{ backgroundColor: primaryColor }}
-      >
-        <div className="text-center text-white px-8 max-w-lg">
+      <div className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden">
+        {/* Background: photo or gradient */}
+        {bestPhoto ? (
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${bestPhoto})` }}
+            />
+            <div className="absolute inset-0 bg-black/50" />
+          </>
+        ) : (
+          <div className="absolute inset-0" style={{ backgroundColor: primaryColor }} />
+        )}
+
+        <div className="relative text-center text-white px-8 max-w-lg z-10">
           {event?.branding?.agent_photo && (
             <img
               src={event.branding.agent_photo}
@@ -355,69 +369,113 @@ export default function KioskPage({
   return (
     <div className="fixed inset-0 flex flex-col bg-slate-50">
       {screen === "welcome" ? (
-        // --- Welcome Screen ---
-        <div
-          className="flex-1 flex flex-col items-center justify-center px-8"
-          style={{ backgroundColor: primaryColor }}
-        >
-          <div className="text-center text-white max-w-lg">
-            {event?.branding?.logo_url && (
-              <img
-                src={event.branding.logo_url}
-                alt=""
-                className="h-16 mx-auto mb-8 object-contain"
+        // --- Welcome Screen: Split-screen layout ---
+        <div className="flex-1 flex flex-col md:flex-row">
+          {/* LEFT: Property media (photo or video) */}
+          <div className="relative h-[40vh] md:h-auto md:w-1/2 overflow-hidden">
+            {videoUrl ? (
+              <video
+                src={videoUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : bestPhoto ? (
+              <div
+                className="absolute inset-0 bg-cover bg-center"
+                style={{ backgroundImage: `url(${bestPhoto})` }}
+              />
+            ) : (
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}cc)`,
+                }}
               />
             )}
-            {event?.branding?.agent_photo && (
-              <img
-                src={event.branding.agent_photo}
-                alt=""
-                className="w-28 h-28 rounded-full object-cover mx-auto mb-6 border-4 border-white/30"
-              />
-            )}
-            <h1 className="text-4xl font-bold mb-3">
-              {event?.welcome_message || "Welcome!"}
-            </h1>
-            {event?.property && (
-              <p className="text-xl opacity-80 mb-2">{event.property.address}</p>
-            )}
-            {event?.property?.city && (
-              <p className="text-lg opacity-60">
-                {[event.property.city, event.property.state]
-                  .filter(Boolean)
-                  .join(", ")}
-              </p>
-            )}
-            <p className="text-base opacity-70 mt-4 mb-8">
-              Please sign in so we can keep you updated
-            </p>
-            <button
-              onClick={() => setScreen("signin")}
-              className="px-12 py-4 bg-white text-slate-900 rounded-2xl text-lg font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
-            >
-              Sign In
-            </button>
+            {/* Subtle gradient overlay for edge blending */}
+            <div className="absolute inset-0 bg-gradient-to-b md:bg-gradient-to-r from-transparent to-black/10" />
           </div>
 
-          {/* PIN exit button */}
-          <button
-            onClick={() => { setPin(""); setPinError(""); setScreen("pin-exit"); }}
-            className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
-            aria-label="Exit kiosk"
-          >
-            <svg className="w-5 h-5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </button>
-        </div>
-      ) : (
-        // --- Sign-in Form ---
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header bar */}
+          {/* RIGHT: Branded content */}
           <div
-            className="px-6 py-4 flex items-center justify-between"
+            className="flex-1 flex flex-col items-center justify-center px-8 relative"
             style={{ backgroundColor: primaryColor }}
           >
+            <div className="text-center text-white max-w-lg">
+              {event?.branding?.logo_url && (
+                <img
+                  src={event.branding.logo_url}
+                  alt=""
+                  className="h-16 mx-auto mb-8 object-contain"
+                />
+              )}
+              {event?.branding?.agent_photo && (
+                <img
+                  src={event.branding.agent_photo}
+                  alt=""
+                  className="w-28 h-28 rounded-full object-cover mx-auto mb-6 border-4 border-white/30"
+                />
+              )}
+              <h1 className="text-4xl font-bold mb-3">
+                {event?.welcome_message || "Welcome!"}
+              </h1>
+              {event?.property && (
+                <p className="text-xl opacity-80 mb-2">{event.property.address}</p>
+              )}
+              {event?.property?.city && (
+                <p className="text-lg opacity-60">
+                  {[event.property.city, event.property.state]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
+              <p className="text-base opacity-70 mt-4 mb-8">
+                Please sign in so we can keep you updated
+              </p>
+              <button
+                onClick={() => setScreen("signin")}
+                className="px-12 py-4 bg-white text-slate-900 rounded-2xl text-lg font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+              >
+                Sign In
+              </button>
+            </div>
+
+            {/* PIN exit button */}
+            <button
+              onClick={() => { setPin(""); setPinError(""); setScreen("pin-exit"); }}
+              className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center"
+              aria-label="Exit kiosk"
+            >
+              <svg className="w-5 h-5 text-white/50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ) : (
+        // --- Sign-in Form: Photo background with floating card ---
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Background: blurred photo or gradient */}
+          {bestPhoto ? (
+            <>
+              <div
+                className="absolute inset-0 bg-cover bg-center scale-110"
+                style={{
+                  backgroundImage: `url(${bestPhoto})`,
+                  filter: "blur(8px)",
+                }}
+              />
+              <div className="absolute inset-0 bg-black/40" />
+            </>
+          ) : (
+            <div className="absolute inset-0" style={{ backgroundColor: primaryColor }} />
+          )}
+
+          {/* Header bar */}
+          <div className="relative px-6 py-4 flex items-center justify-between z-10">
             <button
               onClick={() => { resetForm(); setScreen("welcome"); }}
               className="text-white/80 hover:text-white flex items-center gap-2 text-sm font-medium"
@@ -433,185 +491,187 @@ export default function KioskPage({
             <div className="w-16" />
           </div>
 
-          {/* Form */}
-          <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="max-w-lg mx-auto px-6 py-8 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    autoComplete="given-name"
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                    placeholder="First name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                    placeholder="Last name"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  inputMode="email"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                  placeholder="email@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoComplete="tel"
-                  inputMode="tel"
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                  placeholder="(555) 123-4567"
-                />
-              </div>
-
-              {/* Custom Questions */}
-              {event?.custom_questions?.map((q) => (
-                <div key={q.id}>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    {q.question} {q.required && "*"}
-                  </label>
-                  {q.type === "text" && (
+          {/* Floating form card */}
+          <div className="relative flex-1 overflow-y-auto z-10 flex items-start justify-center py-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 backdrop-blur-sm">
+              <form onSubmit={handleSubmit} className="px-6 py-8 space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      First Name *
+                    </label>
                     <input
                       type="text"
-                      value={answers[q.id] || ""}
-                      onChange={(e) =>
-                        setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-                      }
-                      required={q.required}
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                      autoComplete="given-name"
                       className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                      placeholder="First name"
                     />
-                  )}
-                  {q.type === "select" && (
-                    <select
-                      value={answers[q.id] || ""}
-                      onChange={(e) =>
-                        setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
-                      }
-                      required={q.required}
-                      className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
-                    >
-                      <option value="">Select...</option>
-                      {q.options?.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {q.type === "yes_no" && (
-                    <div className="flex gap-3">
-                      {["Yes", "No"].map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() =>
-                            setAnswers((prev) => ({ ...prev, [q.id]: opt }))
-                          }
-                          className={`flex-1 py-3 rounded-xl text-base font-medium border-2 transition-colors ${
-                            answers[q.id] === opt
-                              ? "border-blue-500 bg-blue-50 text-blue-700"
-                              : "border-slate-200 text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {q.type === "multi_select" && (
-                    <div className="flex flex-wrap gap-2">
-                      {q.options?.map((opt) => {
-                        const selected = (answers[q.id] || "")
-                          .split(",")
-                          .filter(Boolean)
-                          .includes(opt);
-                        return (
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      autoComplete="family-name"
+                      className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    inputMode="email"
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                    placeholder="email@example.com"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="tel"
+                    inputMode="tel"
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+
+                {/* Custom Questions */}
+                {event?.custom_questions?.map((q) => (
+                  <div key={q.id}>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      {q.question} {q.required && "*"}
+                    </label>
+                    {q.type === "text" && (
+                      <input
+                        type="text"
+                        value={answers[q.id] || ""}
+                        onChange={(e) =>
+                          setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                        }
+                        required={q.required}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                      />
+                    )}
+                    {q.type === "select" && (
+                      <select
+                        value={answers[q.id] || ""}
+                        onChange={(e) =>
+                          setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                        }
+                        required={q.required}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white"
+                      >
+                        <option value="">Select...</option>
+                        {q.options?.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {q.type === "yes_no" && (
+                      <div className="flex gap-3">
+                        {["Yes", "No"].map((opt) => (
                           <button
                             key={opt}
                             type="button"
-                            onClick={() => {
-                              const current = (answers[q.id] || "")
-                                .split(",")
-                                .filter(Boolean);
-                              const next = selected
-                                ? current.filter((v) => v !== opt)
-                                : [...current, opt];
-                              setAnswers((prev) => ({
-                                ...prev,
-                                [q.id]: next.join(","),
-                              }));
-                            }}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
-                              selected
+                            onClick={() =>
+                              setAnswers((prev) => ({ ...prev, [q.id]: opt }))
+                            }
+                            className={`flex-1 py-3 rounded-xl text-base font-medium border-2 transition-colors ${
+                              answers[q.id] === opt
                                 ? "border-blue-500 bg-blue-50 text-blue-700"
                                 : "border-slate-200 text-slate-600 hover:border-slate-300"
                             }`}
                           >
                             {opt}
                           </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
+                        ))}
+                      </div>
+                    )}
+                    {q.type === "multi_select" && (
+                      <div className="flex flex-wrap gap-2">
+                        {q.options?.map((opt) => {
+                          const selected = (answers[q.id] || "")
+                            .split(",")
+                            .filter(Boolean)
+                            .includes(opt);
+                          return (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => {
+                                const current = (answers[q.id] || "")
+                                  .split(",")
+                                  .filter(Boolean);
+                                const next = selected
+                                  ? current.filter((v) => v !== opt)
+                                  : [...current, opt];
+                                setAnswers((prev) => ({
+                                  ...prev,
+                                  [q.id]: next.join(","),
+                                }));
+                              }}
+                              className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
+                                selected
+                                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                                  : "border-slate-200 text-slate-600 hover:border-slate-300"
+                              }`}
+                            >
+                              {opt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
 
-              {formError && (
-                <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">
-                  {formError}
-                </p>
-              )}
+                {formError && (
+                  <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-xl">
+                    {formError}
+                  </p>
+                )}
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-4 text-white text-lg font-semibold rounded-2xl shadow-lg hover:shadow-xl disabled:opacity-50 transition-all"
-                style={{ backgroundColor: primaryColor }}
-              >
-                {submitting ? "Signing in..." : "Sign In"}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-4 text-white text-lg font-semibold rounded-2xl shadow-lg hover:shadow-xl disabled:opacity-50 transition-all"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {submitting ? "Signing in..." : "Sign In"}
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* PIN exit button */}
           <button
             onClick={() => { setPin(""); setPinError(""); setScreen("pin-exit"); }}
-            className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center"
+            className="absolute bottom-6 right-6 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center z-10"
             aria-label="Exit kiosk"
           >
-            <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </button>

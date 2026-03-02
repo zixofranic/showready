@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getBestPhoto, type PropertyPhoto } from "@/lib/property-media";
 
 interface EventInfo {
   id: string;
@@ -21,6 +22,8 @@ interface EventInfo {
     address: string;
     city: string | null;
     state: string | null;
+    photos: PropertyPhoto[];
+    tour_video_url: string | null;
   } | null;
 }
 
@@ -124,6 +127,7 @@ export default function RegisterPage({
   };
 
   const primaryColor = event?.branding?.primary_color || "#2563eb";
+  const bestPhoto = getBestPhoto(event?.property?.photos);
 
   if (screen === "loading") {
     return (
@@ -161,11 +165,21 @@ export default function RegisterPage({
 
   if (screen === "success") {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center px-6"
-        style={{ backgroundColor: primaryColor }}
-      >
-        <div className="text-center text-white max-w-sm">
+      <div className="min-h-screen flex items-center justify-center px-6 relative overflow-hidden">
+        {/* Background: photo or gradient */}
+        {bestPhoto ? (
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${bestPhoto})` }}
+            />
+            <div className="absolute inset-0 bg-black/50" />
+          </>
+        ) : (
+          <div className="absolute inset-0" style={{ backgroundColor: primaryColor }} />
+        )}
+
+        <div className="relative text-center text-white max-w-sm z-10">
           {event?.branding?.agent_photo && (
             <img
               src={event.branding.agent_photo}
@@ -190,26 +204,40 @@ export default function RegisterPage({
   // Form screen
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="px-5 pt-8 pb-6 text-center" style={{ backgroundColor: primaryColor }}>
-        {event?.branding?.agent_photo && (
-          <img
-            src={event.branding.agent_photo}
-            alt=""
-            className="w-16 h-16 rounded-full object-cover mx-auto mb-3 border-3 border-white/30"
-          />
+      {/* Photo hero header */}
+      <div className="relative h-[200px] overflow-hidden">
+        {bestPhoto ? (
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center"
+              style={{ backgroundImage: `url(${bestPhoto})` }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-black/60" />
+          </>
+        ) : (
+          <div className="absolute inset-0" style={{ backgroundColor: primaryColor }} />
         )}
-        <h1 className="text-xl font-bold text-white">
-          {event?.welcome_message || "Welcome!"}
-        </h1>
-        {event?.property && (
-          <p className="text-white/80 text-sm mt-1">{event.property.address}</p>
-        )}
-        {event?.property?.city && (
-          <p className="text-white/60 text-xs mt-0.5">
-            {[event.property.city, event.property.state].filter(Boolean).join(", ")}
-          </p>
-        )}
+
+        <div className="relative h-full flex flex-col items-center justify-center px-5 z-10">
+          {event?.branding?.agent_photo && (
+            <img
+              src={event.branding.agent_photo}
+              alt=""
+              className="w-16 h-16 rounded-full object-cover mb-3 border-3 border-white/30"
+            />
+          )}
+          <h1 className="text-xl font-bold text-white">
+            {event?.welcome_message || "Welcome!"}
+          </h1>
+          {event?.property && (
+            <p className="text-white/80 text-sm mt-1">{event.property.address}</p>
+          )}
+          {event?.property?.city && (
+            <p className="text-white/60 text-xs mt-0.5">
+              {[event.property.city, event.property.state].filter(Boolean).join(", ")}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Form */}
