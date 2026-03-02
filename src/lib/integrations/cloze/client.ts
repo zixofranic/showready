@@ -223,29 +223,26 @@ export async function createTimelineNote(
     subject: entry.subject,
     body: entry.body,
     references: entry.to
-      ? [{ type: "person", value: entry.to }]
+      ? [{ type: "person", value: entry.to, name: entry.toName }]
       : undefined,
   };
   return clozeApi("POST", "/timeline/content/create", userId, record);
 }
 
-/** Create a follow-up todo (from = agent email!) */
+/** Create a follow-up todo (QuickTag-proven /timeline/todo/create endpoint) */
 export async function createTodo(
   userId: string,
   todo: ClozeTodo,
 ): Promise<{ ok: boolean; error?: string }> {
-  const record = {
-    style: "todo",
-    uniqueid: `showready-todo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    source: "showready.app",
-    from: todo.from,
-    date: new Date().toISOString(),
-    due: todo.due,
+  const record: Record<string, unknown> = {
     subject: todo.subject,
-    body: todo.body,
-    priority: todo.priority,
+    when: todo.due || new Date().toISOString(),
   };
-  return clozeApi("POST", "/timeline/content/create", userId, record);
+  // participants links the todo to the contact in Cloze agenda
+  if (todo.participants && todo.participants.length > 0) {
+    record.participants = todo.participants;
+  }
+  return clozeApi("POST", "/timeline/todo/create", userId, record);
 }
 
 /** Get profile (verify connection) */

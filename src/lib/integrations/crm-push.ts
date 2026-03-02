@@ -238,6 +238,7 @@ async function pushToCloze(
             .join("\n")
         : "";
 
+    const visitorName = [visitor.first_name, visitor.last_name].filter(Boolean).join(" ");
     const timelineResult = await createTimelineNote(userId, {
       type: "note",
       subject: `Open House Visit — ${propertyInfo}`,
@@ -248,25 +249,31 @@ async function pushToCloze(
         (visitor.phone ? `\nPhone: ${phone || visitor.phone}` : "") +
         answersText,
       from: agentEmail, // CRITICAL: agent email, never visitor
-      to: visitor.email || undefined,
+      to: visitor.email || phone || undefined, // link to contact via email or phone
+      toName: visitorName,
       date: new Date().toISOString(),
     });
     timelineOk = timelineResult.ok;
   }
 
-  // 3. Follow-up todo — due next morning 9am
+  // 3. Follow-up todo — due next morning 9am, linked to visitor contact
   let todoOk = true;
   if (settings.create_todos) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(9, 0, 0, 0);
 
+    // participants links the todo to the visitor in Cloze agenda
+    const participants: string[] = [];
+    if (phone) participants.push(phone);
+    else if (visitor.email) participants.push(visitor.email);
+
     const todoResult = await createTodo(userId, {
       subject: `Follow up with ${visitor.first_name} from ${ctx.eventName}`,
       body: `Visited ${propertyInfo}${priceStr} via ${visitor.source}. ${visitor.email ? `Email: ${visitor.email}` : "No email provided."}`,
       from: agentEmail, // CRITICAL: agent email, never visitor
       due: tomorrow.toISOString(),
-      priority: "normal",
+      participants,
     });
     todoOk = todoResult.ok;
   }

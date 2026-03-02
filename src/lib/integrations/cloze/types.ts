@@ -37,7 +37,8 @@ export interface ClozeTimelineEntry {
   subject: string;
   body: string;
   from: string; // MUST be agent email, not visitor
-  to?: string;
+  to?: string; // visitor email or phone — used as reference to link note to contact
+  toName?: string; // visitor display name for the reference
   date?: string;
 }
 
@@ -47,6 +48,7 @@ export interface ClozeTodo {
   from: string; // MUST be agent email
   due?: string;
   priority?: "high" | "normal" | "low";
+  participants?: string[]; // phone numbers or emails to link todo to contacts
 }
 
 export interface ClozeApiError {
